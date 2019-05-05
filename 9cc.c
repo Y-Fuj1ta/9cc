@@ -76,6 +76,7 @@ int consume(int ty) {
 }
 
 Node *equality();
+Node *relational();
 Node *add();
 Node *mul();
 Node *term();
@@ -83,15 +84,36 @@ Node *unary();
 
 // 等号
 Node *equality() {
-	Node *node = add();
+	Node *node = relational();
 
 	for(;;){
 		if (tokens[pos].ty == TK_EQ){
 			pos++;
-			node = new_node(TK_EQ, node, add());
+			node = new_node(TK_EQ, node, relational());
 		}else if (tokens[pos].ty == TK_NE){
 			pos++;
-			node = new_node(TK_NE, node, add());
+			node = new_node(TK_NE, node, relational());
+		}else{
+			return node;
+		}
+	}
+}
+
+//不等号
+Node *relational(){
+	Node *node = add();
+
+	for(;;){
+		if (tokens[pos].ty == TK_LE){
+			pos++;
+			node = new_node(TK_LE, node, add());
+		}else if (tokens[pos].ty == TK_GE){
+			pos++;
+			node = new_node(TK_LE, add(), node);
+		}else if (consume('<')){
+			node = new_node('<', node, add());
+		}else if (consume('>')){
+			node = new_node('<', add(), node);
 		}else{
 			return node;
 		}
@@ -173,7 +195,22 @@ void tokenize (char *p){
 			p = p + 2;
 			continue;
 		}
-		if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')'){
+		if (!strncmp(p, "<=", 2)){
+			tokens[i].ty = TK_LE;
+			tokens[i].input = p;
+			i++;
+			p = p + 2;
+			continue;
+		}
+		if (!strncmp(p, ">=", 2)){
+			tokens[i].ty = TK_GE;
+			tokens[i].input = p;
+			i++;
+			p = p + 2;
+			continue;
+		}
+		if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || 
+				*p == '(' || *p == ')' || *p == '<' || *p == '>'){
 		tokens[i].ty = *p;
 			tokens[i].input = p;
 			i++;
@@ -217,6 +254,16 @@ void gen(Node *node){
 		case TK_NE:
 			printf("	cmp rax, rdi\n");
 			printf("	setne al\n");
+			printf("	movzb rax, al\n");
+			break;
+		case TK_LE:
+			printf("	cmp rax, rdi\n");
+			printf("	setle al\n");
+			printf("	movzb rax, al\n");
+			break;
+		case '<':
+			printf("	cmp rax, rdi\n");
+			printf("	setl al\n");
 			printf("	movzb rax, al\n");
 			break;
 		case '+':
