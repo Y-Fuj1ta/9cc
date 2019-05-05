@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include<string.h>
 
- // トークンの型を表す値
+// トークンの型を表す値
 enum {
-	TK_NUM = 256, //整数トークン
+	TK_NUM = 256, // 整数トークン
 	TK_EOF,
 };
 
-//ノードの型を表す値
+// ノードの型を表す値
 enum {
 	ND_NUM = 256,
 };
@@ -18,16 +18,16 @@ enum {
  // トークンの型
 typedef struct {
 	int ty; // トークンの型
-	int val; //tyがTK_NUMの場合、その数値
-	char *input; //トークン文字列(エラーメッセージ用)
+	int val; // tyがTK_NUMの場合、その数値
+	char *input; // トークン文字列(エラーメッセージ用)
 } Token;
 
-//トークナイズした結果のトークン列はこの配列に保存する
-//100個以上のトークンは来ないものとする
+// トークナイズした結果のトークン列はこの配列に保存する
+// 100個以上のトークンは来ないものとする
 Token tokens[100];
 
-//エラーを報告するための関数
-//printfと同じ引数をとる
+// エラーを報告するための関数
+// printfと同じ引数をとる
 void error(char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
@@ -36,7 +36,7 @@ void error(char *fmt, ...) {
 	exit(1);
 }
 
-//ノードの型
+// ノードの型
 typedef struct Node {
 	int ty;
 	struct Node *lhs;
@@ -44,7 +44,7 @@ typedef struct Node {
 	int val;
 }Node;
 
-//新しいノードを作成する
+// 新しいノードを作成する
 Node *new_node(int ty, Node *lhs, Node *rhs) {
 	Node *node = malloc(sizeof(Node));
 	node->ty = ty;
@@ -60,10 +60,10 @@ Node *new_node_num(int val) {
 	return node;
 }
 
-//現在着目しているトークンのインデックス
+// 現在着目しているトークンのインデックス
 int pos = 0;
 
-//次のトークンが引数と等しい場合にトークンを読み進めて真を返す
+// 次のトークンが引数と等しい場合にトークンを読み進めて真を返す
 int consume(int ty) {
 	if (tokens[pos].ty != ty)
 		return 0;
@@ -71,21 +71,42 @@ int consume(int ty) {
 	return 1;
 }
 
+Node *add();
+Node *mul();
+
+// 和算
 Node *add() {
-	Node *node = new_node_num(tokens[pos].val);
-	pos++;
+	Node *node = mul();
 
 	for (;;){
 		if (consume('+'))
-			node = new_node('+', node, add());
+			node = new_node('+', node, mul());
 		else if (consume('-'))
-			node = new_node('-', node, add());
+			node = new_node('-', node, mul());
 		else
 			return node;
 	}
 }
 
-//pがさしている文字列をトークンに分割してtokensに保存する
+// 乗算
+Node *mul(){
+	if (tokens[pos].ty != TK_NUM)
+		error("数値ではないトークンです： %s", tokens[pos].input);
+
+	Node *node = new_node_num(tokens[pos++].val);
+	
+	for (;;) {
+		if (consume('*'))
+			node = new_node('*', node, mul());
+		else if (consume('/'))
+			node = new_node('/', node, mul());
+		else
+			return node;
+	}
+}
+
+
+// pがさしている文字列をトークンに分割してtokensに保存する
 void tokenize (char *p){
 	int i = 0;
 	while (*p){
@@ -94,7 +115,7 @@ void tokenize (char *p){
 			continue;
 		}
 	
-		if (*p == '+' || *p == '-'){
+		if (*p == '+' || *p == '-' || *p == '*' || *p == '/'){
 			tokens[i].ty = *p;
 			tokens[i].input = p;
 			i++;
@@ -137,6 +158,12 @@ void gen(Node *node){
 		case '-':
 			printf("	sub rax, rdi\n");
 			break;
+		case '*':
+			printf("	mul rdi\n");
+			break;
+		case '/':
+		printf("	mov rdx, 0\n");
+		printf("	div rdi\n");
 	}
 	printf("	push rax\n");
 }
