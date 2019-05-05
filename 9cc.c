@@ -8,6 +8,10 @@
 enum {
 	TK_NUM = 256, // 整数トークン
 	TK_EOF,
+	TK_EQ, // equal
+	TK_NE, // not equal
+	TK_LE, // less than or equal
+	TK_GE, // greater than or equal
 };
 
 // ノードの型を表す値
@@ -71,16 +75,34 @@ int consume(int ty) {
 	return 1;
 }
 
+Node *equality();
 Node *add();
 Node *mul();
 Node *term();
 Node *unary();
 
+// 等号
+Node *equality() {
+	Node *node = add();
+
+	for(;;){
+		if (tokens[pos].ty == TK_EQ){
+			pos++;
+			node = new_node(TK_EQ, node, add());
+		}else if (tokens[pos].ty == TK_NE){
+			pos++;
+			node = new_node(TK_NE, node, add());
+		}else{
+			return node;
+		}
+	}
+}
+
 // 和算
 Node *add() {
 	Node *node = mul();
 
-	for (;;){
+	for (;;) {
 		if (consume('+'))
 			node = new_node('+', node, mul());
 		else if (consume('-'))
@@ -137,9 +159,22 @@ void tokenize (char *p){
 			p++;
 			continue;
 		}
-	
+		if (!strncmp(p, "==", 2)){
+			tokens[i].ty = TK_EQ;
+			tokens[i].input = p;
+			i++;
+			p = p + 2;
+			continue;
+		}
+		if (!strncmp(p, "!=", 2)){
+			tokens[i].ty = TK_NE;
+			tokens[i].input = p;
+			i++;
+			p = p + 2;
+			continue;
+		}
 		if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')'){
-			tokens[i].ty = *p;
+		tokens[i].ty = *p;
 			tokens[i].input = p;
 			i++;
 			p++;
@@ -167,7 +202,6 @@ void gen(Node *node){
 		printf("	push %d\n", node->val);
 		return;
 	}
-
 	gen(node->lhs);
 	gen(node->rhs);
 
@@ -175,6 +209,16 @@ void gen(Node *node){
 	printf("	pop rax\n");
 
 	switch (node->ty) {
+		case TK_EQ:
+			printf("	cmp rax, rdi\n");
+			printf("	sete al\n");
+			printf("	movzb rax, al\n");
+			break;
+		case TK_NE:
+			printf("	cmp rax, rdi\n");
+			printf("	setne al\n");
+			printf("	movzb rax, al\n");
+			break;
 		case '+':
 			printf("	add rax, rdi\n");
 			break;
@@ -185,8 +229,8 @@ void gen(Node *node){
 			printf("	mul rdi\n");
 			break;
 		case '/':
-		printf("	mov rdx, 0\n");
-		printf("	div rdi\n");
+			printf("	mov rdx, 0\n");
+			printf("	div rdi\n");
 	}
 	printf("	push rax\n");
 }
@@ -200,7 +244,7 @@ int main(int argc, char **argv){
 
 	// トークナイズしてパースする
 	tokenize(argv[1]);
-	Node *node = add();
+	Node *node = equality();
 
 	
 	// アセンブリの前半部分を出力
