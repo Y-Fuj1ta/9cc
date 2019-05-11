@@ -30,6 +30,55 @@ typedef struct {
 // 100個以上のトークンは来ないものとする
 Token tokens[100];
 
+// 可変長ベクタ
+typedef struct {
+	void **data;
+	int capacity;
+	int len;
+} Vector;
+
+// 新しい可変長ベクタを作成する
+Vector *new_vector() {
+	Vector *vec = malloc(sizeof(Vector));
+	vec->data = malloc(sizeof(void *) * 16);
+	vec->capacity = 16;
+	vec->len = 0;
+	return vec;
+}
+
+// 可変長ベクタに新しい要素を追加する
+void vec_push(Vector *vec, void *elem) {
+	if (vec->capacity == vec ->len) {
+		vec->capacity *= 2;
+		vec->data = realloc(vec->data, sizeof(void *) * vec->capacity);
+	}
+	vec->data[vec->len++] = elem;
+	//printf("pushed: %d", vec->len);
+}
+
+// データ構造のユニットテスト
+int expect(int line, int expected, int actual) {
+	if (expected == actual)
+		return 1;
+	fprintf(stderr, "%d: %d expected, but got %d\n",line, expected, actual);
+	exit(1);
+}
+
+void runtest() {
+	Vector *vec = new_vector();
+	expect(__LINE__, 0, vec->len);
+
+	for (int i = 0; i < 100; i++)
+		vec_push(vec, (void *)(__intptr_t)i);
+
+	expect(__LINE__, 100, vec->len);
+	expect(__LINE__, 0, (long)vec->data[0]);
+	expect(__LINE__, 50, (long)vec->data[50]);
+	expect(__LINE__, 99, (long)vec->data[99]);
+
+	printf("OK\n");
+}
+
 // エラーを報告するための関数
 // printfと同じ引数をとる
 void error(char *fmt, ...) {
@@ -211,7 +260,7 @@ void tokenize (char *p){
 		}
 		if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || 
 				*p == '(' || *p == ')' || *p == '<' || *p == '>'){
-		tokens[i].ty = *p;
+			tokens[i].ty = *p;
 			tokens[i].input = p;
 			i++;
 			p++;
@@ -284,7 +333,12 @@ void gen(Node *node){
 
 
 int main(int argc, char **argv){
-	if (argc != 2){
+	if (!strcmp(argv[1], "-test")) {
+		runtest();
+		return 0;
+	}
+
+	if (argc != 2) {
 		fprintf(stderr, "引数の個数が正しくありません。\n");
 		return 1;
 	}
