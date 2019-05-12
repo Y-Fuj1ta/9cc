@@ -26,10 +26,6 @@ typedef struct {
 	char *input; // トークン文字列(エラーメッセージ用)
 } Token;
 
-// トークナイズした結果のトークン列はこの配列に保存する
-// 100個以上のトークンは来ないものとする
-Token tokens[100];
-
 // 可変長ベクタ
 typedef struct {
 	void **data;
@@ -53,7 +49,37 @@ void vec_push(Vector *vec, void *elem) {
 		vec->data = realloc(vec->data, sizeof(void *) * vec->capacity);
 	}
 	vec->data[vec->len++] = elem;
-	//printf("pushed: %d", vec->len);
+}
+
+// トークンを格納する可変長ベクタ
+Vector *token_vec;
+
+// 可変長ベクタからi番目のトークンを取り出し
+Token get_token(Vector *vec, int i){
+	return (* (Token *)vec->data[i]);
+}
+
+// 可変長ベクタにトークンを追加
+void add_token(int ty, char* p, int i){
+	if (i >token_vec->len){
+		return;
+	}
+	Token *atoken = malloc(sizeof(Token));
+	atoken->ty = ty;
+	atoken->input = p;
+	vec_push(token_vec, (void *)atoken);
+}
+
+// 可変長ベクタに数字トークンを追加
+void add_num_token(int val, char* p, int i){
+	if (i > token_vec->len){
+		return;
+	}
+	Token *atoken = malloc(sizeof(Token));
+	atoken->ty = TK_NUM;
+	atoken->input = p;
+	atoken->val = val;
+	vec_push(token_vec, (void *)atoken);
 }
 
 // データ構造のユニットテスト
@@ -118,7 +144,8 @@ int pos = 0;
 
 // 次のトークンが引数と等しい場合にトークンを読み進めて真を返す
 int consume(int ty) {
-	if (tokens[pos].ty != ty)
+	Token tk = get_token(token_vec, pos);
+	if (tk.ty != ty)
 		return 0;
 	pos++;
 	return 1;
@@ -136,10 +163,10 @@ Node *equality() {
 	Node *node = relational();
 
 	for(;;){
-		if (tokens[pos].ty == TK_EQ){
+		if (get_token(token_vec, pos).ty == TK_EQ){
 			pos++;
 			node = new_node(TK_EQ, node, relational());
-		}else if (tokens[pos].ty == TK_NE){
+		}else if (get_token(token_vec, pos).ty == TK_NE){
 			pos++;
 			node = new_node(TK_NE, node, relational());
 		}else{
@@ -153,10 +180,10 @@ Node *relational(){
 	Node *node = add();
 
 	for(;;){
-		if (tokens[pos].ty == TK_LE){
+		if (get_token(token_vec, pos).ty == TK_LE){
 			pos++;
 			node = new_node(TK_LE, node, add());
-		}else if (tokens[pos].ty == TK_GE){
+		}else if (get_token(token_vec, pos).ty == TK_GE){
 			pos++;
 			node = new_node(TK_LE, add(), node);
 		}else if (consume('<')){
@@ -211,19 +238,20 @@ Node *term() {
 	if (consume('(')) {
 		Node *node = add();
 		if (!consume(')'))
-			error("開きカッコに対する閉じカッコがありません： %s", tokens[pos].input);
+			error("開きカッコに対する閉じカッコがありません： %s", get_token(token_vec, pos).input);
 		return node;
 	}
 
-	if (tokens[pos].ty == TK_NUM)
-		return new_node_num(tokens[pos++].val);
+	if (get_token(token_vec, pos).ty == TK_NUM)
+		return new_node_num(get_token(token_vec, pos++).val);
 
-	error("数値でも開きカッコでもないトークンです： %s", tokens[pos].input);
+	error("数値でも開きカッコでもないトークンです： %s", get_token(token_vec, pos).input);
 }
 
 
-// pがさしている文字列をトークンに分割してtokensに保存する
+// pがさしている文字列をトークンに分割して可変長ベクタに保存する
 void tokenize (char *p){
+	token_vec = new_vector();
 	int i = 0;
 	while (*p){
 		if (isspace(*p)){
@@ -231,46 +259,39 @@ void tokenize (char *p){
 			continue;
 		}
 		if (!strncmp(p, "==", 2)){
-			tokens[i].ty = TK_EQ;
-			tokens[i].input = p;
+			add_token(TK_EQ, p, i);
 			i++;
 			p = p + 2;
 			continue;
 		}
 		if (!strncmp(p, "!=", 2)){
-			tokens[i].ty = TK_NE;
-			tokens[i].input = p;
+			add_token(TK_NE, p, i);
 			i++;
 			p = p + 2;
 			continue;
 		}
 		if (!strncmp(p, "<=", 2)){
-			tokens[i].ty = TK_LE;
-			tokens[i].input = p;
+			add_token(TK_LE, p, i);
 			i++;
 			p = p + 2;
 			continue;
 		}
 		if (!strncmp(p, ">=", 2)){
-			tokens[i].ty = TK_GE;
-			tokens[i].input = p;
+			add_token(TK_GE, p, i);
 			i++;
 			p = p + 2;
 			continue;
 		}
 		if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || 
 				*p == '(' || *p == ')' || *p == '<' || *p == '>'){
-			tokens[i].ty = *p;
-			tokens[i].input = p;
+			add_token(*p, p, i);
 			i++;
 			p++;
 			continue;
 		}
 	
 		if (isdigit(*p)){
-			tokens[i].ty = TK_NUM;
-			tokens[i].input = p;
-			tokens[i].val = strtol(p, &p, 10);
+			add_num_token(strtol(p, &p, 10), p, i);
 			i++;
 			continue;
 		}
@@ -278,8 +299,7 @@ void tokenize (char *p){
 		error("トークナイズできません： %s", p);
 		exit(1);
 	}
-	tokens[i].ty = TK_EOF;
-	tokens[i].input = p;
+	add_token(TK_EOF, p, i);
 }
 
 //スタック操作命令
